@@ -1,7 +1,7 @@
-extern crate hwloc;
+extern crate hwloc2;
 extern crate libc;
 extern crate rayon;
-use self::hwloc::{ObjectType, Topology, TopologyObject, CPUBIND_THREAD};
+use hwloc2::{ObjectType, Topology, TopologyObject, CpuBindFlags};
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -31,7 +31,7 @@ pub enum Policy {
 impl ThreadPoolBuilder {
     /// Creates a new ThreadPoolBuilder. We bind to numa by default.
     pub fn new() -> Self {
-        let topo = Arc::new(Mutex::new(Topology::new()));
+        let topo = Arc::new(Mutex::new(Topology::new().unwrap()));
         ThreadPoolBuilder {
             builder: rayon::ThreadPoolBuilder::new().start_handler(move |thread_id| {
                 bind_numa(thread_id, &topo);
@@ -50,7 +50,7 @@ impl ThreadPoolBuilder {
     where
         H: Fn(usize) + Send + Sync + 'static,
     {
-        let topo = Arc::new(Mutex::new(Topology::new()));
+        let topo = Arc::new(Mutex::new(Topology::new().unwrap()));
         self.builder = self.builder.start_handler(move |thread_id| {
             bind_numa(thread_id, &topo);
             start_handler(thread_id);
@@ -75,7 +75,7 @@ impl ThreadPoolBuilder {
 
     /// Build the global `ThreadPool`.
     pub fn build_global(self) -> Result<(), rayon::ThreadPoolBuildError> {
-        let topo = Arc::new(Mutex::new(Topology::new()));
+        let topo = Arc::new(Mutex::new(Topology::new().unwrap()));
 
         match self.bind_policy {
             Policy::RoundRobinNuma => self
@@ -123,6 +123,6 @@ fn bind_numa(thread_id: usize, topo: &Arc<Mutex<Topology>>) {
     };
 
     locked_topo
-        .set_cpubind_for_thread(pthread_id, cpu_set, CPUBIND_THREAD)
+        .set_cpubind_for_thread(pthread_id, cpu_set, CpuBindFlags::CPUBIND_THREAD)
         .unwrap();
 }
