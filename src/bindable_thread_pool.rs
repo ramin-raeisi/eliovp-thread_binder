@@ -2,8 +2,9 @@ extern crate hwloc2;
 extern crate libc;
 extern crate rayon;
 use hwloc2::{ObjectType, Topology, TopologyObject, CpuBindFlags};
-use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::{
+    Arc, Mutex,
+};
 
 /// Same as rayon's ThreadPoolBuilder expect you get an extra `bind` method.
 pub struct ThreadPoolBuilder {
@@ -37,6 +38,17 @@ impl ThreadPoolBuilder {
                 bind_numa(thread_id, &topo);
             }),
             bind_policy: Policy::RoundRobinNuma,
+        }
+    }
+
+    pub fn new_with_core_set(core_set: Vec<usize>) -> Self {
+        let topo = Arc::new(Mutex::new(Topology::new().unwrap()));
+        let core_set = Arc::new(core_set);
+        ThreadPoolBuilder {
+            builder: rayon::ThreadPoolBuilder::new().start_handler(move |thread_id| {
+                bind_to_set(thread_id, &core_set, &topo);
+            }),
+            bind_policy: Policy::NoBinding,
         }
     }
 
@@ -119,6 +131,30 @@ fn bind_numa(thread_id: usize, topo: &Arc<Mutex<Topology>>) {
             .cycle()
             .nth(thread_id)
             .expect("no cores below given ancestor");
+        unit.cpuset().unwrap()
+    };
+
+    locked_topo
+        .set_cpubind_for_thread(pthread_id, cpu_set, CpuBindFlags::CPUBIND_THREAD)
+        .unwrap();
+}
+
+fn bind_to_set(thread_id: usize, core_set: &Arc<Vec<usize>>, topo: &Arc<Mutex<Topology>>) {
+    let pthread_id = unsafe { libc::pthread_self() };
+    let mut locked_topo = topo.lock().unwrap();
+    let cpu_set = {
+        let all_cores = (*locked_topo)
+            .objects_with_type(&ObjectType::Core)
+            .unwrap();
+        //let res = Vec::with_capacity(core_set.len());
+        let unit = all_cores
+            .iter()
+            .enumerate()
+            .filter(|(idx, _core)| core_set.contains(idx))
+            .map(|(_idx, core)| core)
+            .cycle()
+            .nth(thread_id)
+            .unwrap();
         unit.cpuset().unwrap()
     };
 
