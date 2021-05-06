@@ -41,9 +41,8 @@ impl ThreadPoolBuilder {
         }
     }
 
-    pub fn new_with_core_set(core_set: Vec<usize>) -> Self {
+    pub fn new_with_core_set(core_set: Arc<Vec<usize>>) -> Self {
         let topo = Arc::new(Mutex::new(Topology::new().unwrap()));
-        let core_set = Arc::new(core_set);
         ThreadPoolBuilder {
             builder: rayon::ThreadPoolBuilder::new().start_handler(move |thread_id| {
                 bind_to_set(thread_id, &core_set, &topo);
