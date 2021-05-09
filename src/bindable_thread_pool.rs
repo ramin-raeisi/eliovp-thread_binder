@@ -1,7 +1,7 @@
 extern crate hwloc2;
 extern crate libc;
 extern crate rayon;
-use hwloc2::{ObjectType, Topology, TopologyObject, CpuBindFlags};
+use hwloc2::{ObjectType, Topology, TopologyObject, CpuBindFlags, CpuSet};
 use std::sync::{
     Arc, Mutex,
 };
@@ -10,6 +10,7 @@ use std::sync::{
 pub struct ThreadPoolBuilder {
     builder: rayon::ThreadPoolBuilder,
     bind_policy: Policy,
+    core_set: Arc<Vec<usize>>,
 }
 
 impl Default for ThreadPoolBuilder {
@@ -17,6 +18,7 @@ impl Default for ThreadPoolBuilder {
         ThreadPoolBuilder {
             builder: Default::default(),
             bind_policy: Policy::RoundRobinNuma,
+            core_set: Default::default(),
         }
     }
 }
@@ -27,6 +29,8 @@ pub enum Policy {
     RoundRobinNuma,
     /// Do not bind.
     NoBinding,
+    /// Binds all threads to the core set
+    CoreSet,
 }
 
 impl ThreadPoolBuilder {
@@ -38,16 +42,19 @@ impl ThreadPoolBuilder {
                 bind_numa(thread_id, &topo);
             }),
             bind_policy: Policy::RoundRobinNuma,
+            core_set: Default::default(),
         }
     }
 
     pub fn new_with_core_set(core_set: Arc<Vec<usize>>) -> Self {
         let topo = Arc::new(Mutex::new(Topology::new().unwrap()));
+        let core_set_clone = core_set.clone();
         ThreadPoolBuilder {
             builder: rayon::ThreadPoolBuilder::new().start_handler(move |thread_id| {
-                bind_to_set(thread_id, &core_set, &topo);
+                bind_to_set(thread_id, &core_set_clone, &topo);
             }),
-            bind_policy: Policy::NoBinding,
+            bind_policy: Policy::CoreSet,
+            core_set: core_set.clone(),
         }
     }
 
@@ -80,6 +87,7 @@ impl ThreadPoolBuilder {
         let pool = match self.bind_policy {
             Policy::RoundRobinNuma => self.builder.build(),
             Policy::NoBinding => self.builder.build(),
+            Policy::CoreSet => self.builder.build(),
         };
         pool
     }
@@ -96,6 +104,15 @@ impl ThreadPoolBuilder {
                 })
                 .build_global(),
             Policy::NoBinding => self.builder.build_global(),
+            Policy::CoreSet => {
+                let core_set = self.core_set.clone();
+                self
+                .builder
+                .start_handler(move |thread_id| {
+                    bind_to_set(thread_id, &core_set, &topo)
+                })
+                .build_global()
+            },
         }
     }
 }
@@ -138,23 +155,22 @@ fn bind_numa(thread_id: usize, topo: &Arc<Mutex<Topology>>) {
         .unwrap();
 }
 
-fn bind_to_set(thread_id: usize, core_set: &Arc<Vec<usize>>, topo: &Arc<Mutex<Topology>>) {
+fn bind_to_set(_thread_id: usize, core_set: &Arc<Vec<usize>>, topo: &Arc<Mutex<Topology>>) {
     let pthread_id = unsafe { libc::pthread_self() };
     let mut locked_topo = topo.lock().unwrap();
     let cpu_set = {
         let all_cores = (*locked_topo)
             .objects_with_type(&ObjectType::Core)
             .unwrap();
-        //let res = Vec::with_capacity(core_set.len());
-        let unit = all_cores
+
+        all_cores
             .iter()
             .enumerate()
             .filter(|(idx, _core)| core_set.contains(idx))
-            .map(|(_idx, core)| core)
-            .cycle()
-            .nth(thread_id)
-            .unwrap();
-        unit.cpuset().unwrap()
+            .map(|(_idx, core)| core.cpuset().unwrap())
+            .fold(CpuSet::new(), |acc, new_set| {
+                CpuSet::or(acc, new_set)
+            })
     };
 
     locked_topo
