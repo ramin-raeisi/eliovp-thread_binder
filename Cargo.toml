@@ -16,3 +16,4 @@ rayon-core = "1.6.1"
 rayon-futures = "0.1.1"
 hwloc2 = {git = "ssh://git@github.com/NilFoundation/hwloc2-rs" }
 libc = "^0.2"
+log = "0.4.7"
