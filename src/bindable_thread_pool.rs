@@ -6,6 +6,8 @@ use std::sync::{
     Arc, Mutex,
 };
 
+use log::info;
+
 /// Same as rayon's ThreadPoolBuilder expect you get an extra `bind` method.
 pub struct ThreadPoolBuilder {
     builder: rayon::ThreadPoolBuilder,
@@ -47,6 +49,7 @@ impl ThreadPoolBuilder {
     }
 
     pub fn new_with_core_set(core_set: Arc<Vec<usize>>) -> Self {
+        info!("new pool with cores: {:?}", core_set);
         let topo = Arc::new(Mutex::new(Topology::new().unwrap()));
         let core_set_clone = core_set.clone();
         ThreadPoolBuilder {
