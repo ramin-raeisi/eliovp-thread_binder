@@ -163,7 +163,7 @@ fn bind_to_set(_thread_id: usize, core_set: &Arc<Vec<usize>>, topo: &Arc<Mutex<T
     let mut locked_topo = topo.lock().unwrap();
     let cpu_set = {
         let all_cores = (*locked_topo)
-            .objects_with_type(&ObjectType::Core)
+            .objects_with_type(&ObjectType::PU)
             .unwrap();
 
         all_cores
