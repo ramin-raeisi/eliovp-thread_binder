@@ -51,6 +51,7 @@ impl ThreadPoolBuilder {
     pub fn new_with_core_set(core_set: Arc<Vec<usize>>) -> Self {
         info!("new pool with cores: {:?}", core_set);
         let topo = Arc::new(Mutex::new(Topology::new().unwrap()));
+        print_set(&core_set.clone(), &topo);
         let core_set_clone = core_set.clone();
         ThreadPoolBuilder {
             builder: rayon::ThreadPoolBuilder::new().start_handler(move |thread_id| {
@@ -179,4 +180,23 @@ fn bind_to_set(_thread_id: usize, core_set: &Arc<Vec<usize>>, topo: &Arc<Mutex<T
     locked_topo
         .set_cpubind_for_thread(pthread_id, cpu_set, CpuBindFlags::CPUBIND_THREAD)
         .unwrap();
+}
+
+fn print_set(core_set: &Arc<Vec<usize>>, topo: &Arc<Mutex<Topology>>) {
+    let mut locked_topo = topo.lock().unwrap();
+    let cpu_set = {
+        let all_cores = (*locked_topo)
+            .objects_with_type(&ObjectType::PU)
+            .unwrap();
+
+        all_cores
+            .iter()
+            .enumerate()
+            .filter(|(idx, _core)| core_set.contains(idx))
+            .map(|(_idx, core)| core.cpuset().unwrap())
+            .fold(CpuSet::new(), |acc, new_set| {
+                CpuSet::or(acc, new_set)
+            })
+    };
+    info!("Set value: {:?}", cpu_set);
 }
