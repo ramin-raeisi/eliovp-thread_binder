@@ -172,18 +172,18 @@ fn bind_to_set(_thread_id: usize, core_set: &Arc<Vec<usize>>, topo: &Arc<Mutex<T
             .enumerate()
             .filter(|(idx, _core)| core_set.contains(idx))
             .map(|(_idx, core)| core.cpuset().unwrap())
-            .collect::<Vec<_>>()
+            .fold(CpuSet::new(), |acc, new_set| {
+                CpuSet::or(acc, new_set)
+            })
     };
 
-    cpu_set.into_iter().for_each(|cpu_set| {
-        locked_topo
-            .set_cpubind_for_thread(pthread_id, cpu_set, CpuBindFlags::CPUBIND_THREAD)
-            .unwrap();
-    })
+    locked_topo
+        .set_cpubind_for_thread(pthread_id, cpu_set, CpuBindFlags::CPUBIND_THREAD)
+        .unwrap();
 }
 
 fn print_set(core_set: &Arc<Vec<usize>>, topo: &Arc<Mutex<Topology>>) {
-    let locked_topo = topo.lock().unwrap();
+    let mut locked_topo = topo.lock().unwrap();
     let cpu_set = {
         let all_cores = (*locked_topo)
             .objects_with_type(&ObjectType::PU)
