@@ -6,7 +6,7 @@ use std::sync::{
     Arc, Mutex,
 };
 
-use log::info;
+use log::trace;
 
 /// Same as rayon's ThreadPoolBuilder expect you get an extra `bind` method.
 pub struct ThreadPoolBuilder {
@@ -49,7 +49,7 @@ impl ThreadPoolBuilder {
     }
 
     pub fn new_with_core_set(core_set: Arc<Vec<usize>>) -> Self {
-        info!("new pool with cores: {:?}", core_set);
+        trace!("new pool with cores: {:?}", core_set);
         let topo = Arc::new(Mutex::new(Topology::new().unwrap()));
         print_set(&core_set.clone(), &topo);
         let core_set_clone = core_set.clone();
@@ -183,7 +183,7 @@ fn bind_to_set(_thread_id: usize, core_set: &Arc<Vec<usize>>, topo: &Arc<Mutex<T
 }
 
 fn print_set(core_set: &Arc<Vec<usize>>, topo: &Arc<Mutex<Topology>>) {
-    let mut locked_topo = topo.lock().unwrap();
+    let locked_topo = topo.lock().unwrap();
     let cpu_set = {
         let all_cores = (*locked_topo)
             .objects_with_type(&ObjectType::PU)
@@ -198,5 +198,5 @@ fn print_set(core_set: &Arc<Vec<usize>>, topo: &Arc<Mutex<Topology>>) {
                 CpuSet::or(acc, new_set)
             })
     };
-    info!("Set value: {:?}", cpu_set);
+    trace!("Set value: {:?}", cpu_set);
 }
