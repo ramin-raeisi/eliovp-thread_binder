@@ -14,6 +14,6 @@ exclude = ["*.nix"]
 rayon = "1.2.1"
 rayon-core = "1.6.1"
 rayon-futures = "0.1.1"
-hwloc2 = {git = "https://github.com/ramin-raeisi/eliovp-thread_binder.git" }
+hwloc2 = {git = https://github.com/ramin-raeisi/eliovp-hwloc2-rs.git" }
 libc = "^0.2"
 log = "0.4.7"
